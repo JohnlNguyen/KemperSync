@@ -1,0 +1,59 @@
+# Author: John Nguyen
+# Usage watch <local_path>"
+# Optional <remote_path>
+
+local_path=$1
+remote_path=$2
+
+if [ -z "$local_path" ]
+then 
+   echo "usage: watch <local_path>"
+   echo "optional: <remote_path>, file must exist at <remote_path>"
+   exit
+fi 
+
+if [ "$local_path" == 'setup' ] 
+then
+   ~/.kemperSync/setup.sh  
+   exit
+fi
+
+username=$(sed -n 1p ~/.kemperSync/info)
+pc_num=$(sed -n 2p ~/.kemperSync/info)
+shift
+cmd="scp -r "$local_path" "$username"@pc"$pc_num".cs.ucdavis.edu:~"$remote_path""
+echo "Intialize"
+$cmd > /dev/null
+
+sha=0
+function check_sum() {
+  sha=`ls -lT $local_path | openssl sha1`
+}
+
+check_sum
+previous_sha=$sha
+function build() {
+  echo " syncing...\n\n"
+  $cmd > /dev/null
+  echo "\n--> resumed watching."
+}
+
+function compare() {
+  check_sum
+  if [[ $sha != $previous_sha ]] ; then
+    echo "change detected,\c"
+    build
+    previous_sha=$sha
+  else
+    echo ".\c"
+  fi
+}
+trap build SIGQUIT
+trap exit SIGINT
+
+echo "--> Press Ctrl+\\ to force build, Ctrl+C to exit."
+echo "--> watching \"$local_path\"."
+while true; do
+  compare
+  sleep 1
+done
